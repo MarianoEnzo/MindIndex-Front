@@ -28,15 +28,17 @@ export function Sources({ sources }: SourcesProps) {
       {open && (
         <div className="mt-2 flex flex-col gap-1.5 pl-4 border-l border-accent/30">
           {sources.map((chunk, i) => (
-            <div key={chunk.id ?? i} className="font-mono text-xs leading-relaxed text-accent/90">
+            <div key={chunk.id ?? i} className="font-mono text-xs leading-relaxed">
               <span className="text-muted-foreground mr-2">#{i + 1}</span>
-              <span className="text-foreground">{chunk.documentName}</span>
+              {chunk.documentName && (
+                <span className="text-foreground">{chunk.documentName}</span>
+              )}
               {chunk.pageNumber != null && (
                 <span className="text-muted-foreground"> · p.{chunk.pageNumber}</span>
               )}
-              <span className="text-accent ml-2">
-                score: {typeof chunk.score === 'number' ? chunk.score.toFixed(4) : chunk.score}
-              </span>
+              {typeof chunk.score === 'number' && chunk.score > 0 && (
+                <span className="text-accent ml-2">score: {chunk.score.toFixed(4)}</span>
+              )}
             </div>
           ))}
         </div>

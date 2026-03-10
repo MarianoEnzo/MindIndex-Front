@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ArrowUp, ArrowLeft } from 'lucide-react'
+import { ArrowUp, ArrowLeft, Globe, Linkedin, Mail, Sun, Moon } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { chat } from '@/lib/api'
+import { streamChat } from '@/lib/api'
 import type { Chunk } from '@/lib/api'
 import { Sources } from '@/components/sources'
 import { EcgLine } from '@/components/ecg-line'
 import { PipelineLog } from '@/components/pipeline-log'
 import type { PipelineStep } from '@/components/pipeline-log'
+import { useApp } from '@/lib/app-context'
 
 interface Message {
   id: string
@@ -22,46 +23,14 @@ interface ChatPageProps {
   collectionName: string
 }
 
-function buildPipelineSteps(query: string, chunks?: Chunk[], done = false): PipelineStep[] {
-  const topScore = chunks && chunks.length > 0
-    ? Math.max(...chunks.map((c) => c.score ?? 0))
-    : null
-
-  return [
-    {
-      id: 'embed',
-      label: 'Generating query embedding...',
-      status: done ? 'done' : 'processing',
-    },
-    {
-      id: 'retrieve',
-      label:
-        done && chunks
-          ? `Retrieved ${chunks.length} chunks (top similarity: ${topScore?.toFixed(2) ?? '—'})`
-          : 'Retrieving relevant chunks...',
-      status: done ? 'done' : 'pending',
-    },
-    {
-      id: 'llm',
-      label: 'Sending context to Claude...',
-      status: done ? 'done' : 'pending',
-    },
-    {
-      id: 'respond',
-      label: 'Streaming response...',
-      status: done ? 'done' : 'pending',
-    },
-  ]
-}
-
 export function ChatView({ collectionId, collectionName }: ChatPageProps) {
   const navigate = useNavigate()
+  const { theme, setTheme, lang, setLang, t } = useApp()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [steps, setSteps] = useState<PipelineStep[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -72,56 +41,63 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
     const query = input.trim()
     if (!query || loading) return
 
-    const userMsg: Message = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: query,
-    }
-    setMessages((prev) => [...prev, userMsg])
+    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', content: query }])
     setInput('')
     setLoading(true)
 
-    // animate pipeline steps progressively
-    setSteps(buildPipelineSteps(query))
+    let embedStep: PipelineStep = { id: 'embed', label: t.stepEmbed, status: 'pending' }
+    let retrieveStep: PipelineStep = { id: 'retrieve', label: t.stepRetrieve, status: 'pending' }
+    let llmStep: PipelineStep = { id: 'llm', label: t.stepLlm, status: 'pending' }
+    let respondStep: PipelineStep = { id: 'respond', label: t.stepRespond, status: 'pending' }
+    setSteps([embedStep, retrieveStep, llmStep, respondStep])
 
-    // step 1 done after a tick
-    await delay(600)
-    setSteps([
-      { id: 'embed', label: 'Generating query embedding...', status: 'done' },
-      { id: 'retrieve', label: 'Retrieving relevant chunks...', status: 'processing' },
-      { id: 'llm', label: 'Sending context to Claude...', status: 'pending' },
-      { id: 'respond', label: 'Streaming response...', status: 'pending' },
-    ])
+    let embedStartTime = 0
+    let retrievalDoneTime = 0
+    let finalAnswer = ''
+    let finalSources: Chunk[] = []
 
     try {
-      const result = await chat(query, collectionId)
-
-      const topScore =
-        result.sources && result.sources.length > 0
-          ? Math.max(...result.sources.map((c) => c.score ?? 0))
-          : null
-
-      setSteps([
-        { id: 'embed', label: 'Generating query embedding...', status: 'done' },
-        {
-          id: 'retrieve',
-          label: `Retrieved ${result.sources?.length ?? 0} chunks (top similarity: ${topScore?.toFixed(2) ?? '—'})`,
-          status: 'done',
-        },
-        { id: 'llm', label: 'Sending context to Claude...', status: 'done' },
-        { id: 'respond', label: 'Streaming response...', status: 'done' },
-      ])
-
-      const assistantMsg: Message = {
-        id: `a-${Date.now()}`,
-        role: 'assistant',
-        content: result.answer,
-        sources: result.sources,
+      for await (const event of streamChat(query, collectionId)) {
+        if (event.step === 'embedding' && event.status === 'processing') {
+          embedStartTime = Date.now()
+          embedStep = { ...embedStep, status: 'processing' }
+          setSteps([embedStep, retrieveStep, llmStep, respondStep])
+        } else if (event.step === 'retrieval' && event.status === 'done') {
+          const elapsedMs = embedStartTime ? Date.now() - embedStartTime : undefined
+          retrievalDoneTime = Date.now()
+          embedStep = { ...embedStep, status: 'done', durationMs: elapsedMs }
+          retrieveStep = {
+            id: 'retrieve',
+            label: t.stepRetrieveDone(event.chunks.length, event.topSimilarity.toFixed(3)),
+            status: 'done',
+            durationMs: elapsedMs,
+          }
+          llmStep = { ...llmStep, status: 'processing' }
+          setSteps([embedStep, retrieveStep, llmStep, respondStep])
+        } else if (event.step === 'claude' && event.status === 'done') {
+          const llmMs = retrievalDoneTime ? Date.now() - retrievalDoneTime : undefined
+          llmStep = { ...llmStep, status: 'done', durationMs: llmMs }
+          respondStep = { ...respondStep, status: 'done' }
+          setSteps([embedStep, retrieveStep, llmStep, respondStep])
+          finalAnswer = event.answer
+          finalSources = event.sources
+        }
       }
-      setMessages((prev) => [...prev, assistantMsg])
-    } catch (err) {
-      setSteps((prev) =>
-        prev.map((s) => (s.status !== 'done' ? { ...s, status: 'done', label: s.label + ' [error]' } : s)),
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          content: finalAnswer || 'No response received.',
+          sources: finalSources,
+        },
+      ])
+    } catch {
+      setSteps(
+        [embedStep, retrieveStep, llmStep, respondStep].map((s) =>
+          s.status !== 'done' ? { ...s, label: s.label + ' [error]', status: 'done' as const } : s,
+        ),
       )
       setMessages((prev) => [
         ...prev,
@@ -148,25 +124,47 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
       {/* Left: Conversation */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Header */}
-        <header className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Home
-          </button>
-          <span className="text-border">·</span>
-          <span className="text-sm font-medium text-foreground">{collectionName}</span>
+        <header className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-accent transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              {t.home}
+            </button>
+            <span className="text-border text-xs">·</span>
+            <span className="font-mono text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
+              {collectionName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+              className="font-mono text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-accent/40 transition-all"
+            >
+              {lang === 'en' ? 'ES' : 'EN'}
+            </button>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="p-1.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-accent/40 transition-all"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </header>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {messages.length === 0 && !loading && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-              <p className="text-2xl font-bold text-foreground">MindIndex</p>
+              <p className="font-mono text-xs text-accent/60 tracking-widest uppercase">
+                [ {collectionName} ]
+              </p>
+              <p className="text-3xl font-bold text-foreground">MindIndex</p>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Ask anything about the documents in{' '}
+                {t.chatEmpty}{' '}
                 <span className="text-foreground font-medium">{collectionName}</span>.
               </p>
             </div>
@@ -176,7 +174,7 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
             {messages.map((msg) => (
               <div key={msg.id} className={msg.role === 'user' ? 'flex justify-end' : ''}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-lg bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-foreground leading-relaxed">
+                  <div className="max-w-lg bg-accent/10 border border-accent/20 rounded-lg px-4 py-2.5 text-sm text-foreground leading-relaxed">
                     {msg.content}
                   </div>
                 ) : (
@@ -190,10 +188,8 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
               </div>
             ))}
             {loading && (
-              <div className="flex gap-1.5 items-center text-muted-foreground">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:0ms]" />
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:150ms]" />
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-bounce [animation-delay:300ms]" />
+              <div className="flex items-center gap-1 text-muted-foreground font-mono text-sm">
+                <span className="text-accent animate-pulse">▋</span>
               </div>
             )}
             <div ref={bottomRef} />
@@ -205,19 +201,18 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
           <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
             <div className="flex items-end gap-2 border border-border rounded-lg bg-card px-3 py-2 focus-within:ring-1 focus-within:ring-accent focus-within:border-accent transition-all">
               <textarea
-                ref={textareaRef}
                 rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask a question..."
-                className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none leading-relaxed max-h-32"
+                placeholder={t.chatPlaceholder}
+                className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none leading-relaxed max-h-32 font-mono"
                 disabled={loading}
               />
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
-                className="h-7 w-7 rounded-md bg-accent flex items-center justify-center text-white hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0"
+                className="h-7 w-7 rounded-md bg-accent flex items-center justify-center text-black hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
                 aria-label="Send"
               >
                 <ArrowUp className="h-4 w-4" />
@@ -229,22 +224,59 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
 
       {/* Right: Pipeline panel */}
       <aside className="hidden lg:flex w-72 border-l border-border flex-col bg-card shrink-0">
-        <div className="px-5 pt-5 pb-3 border-b border-border">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Pipeline
+        {/* Pipeline header */}
+        <div className="px-5 pt-5 pb-3 border-b border-border shrink-0">
+          <p className="font-mono text-xs tracking-wider">
+            <span className="text-muted-foreground">{'>'}</span>{' '}
+            <span className="text-accent">{t.pipeline}</span>
           </p>
         </div>
-        <div className="px-5 pt-4 border-b border-border">
+
+        {/* ECG */}
+        <div className="px-5 py-3 border-b border-border shrink-0">
           <EcgLine active={loading} />
         </div>
+
+        {/* Steps */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <PipelineLog steps={steps} />
+          <PipelineLog steps={steps} waitingLabel={t.pipelineWaiting} />
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-border shrink-0">
+          <div className="flex flex-col gap-2.5">
+            <p className="font-mono text-[10px] text-muted-foreground/50 mb-1">
+              Mariano Quiroga
+            </p>
+            <a
+              href="https://www.mequiroga.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-accent transition-colors"
+            >
+              <Globe className="h-3 w-3 shrink-0" />
+              mequiroga.com
+            </a>
+            <a
+              href="https://www.linkedin.com/in/mariano-quirogait/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-accent transition-colors"
+            >
+              <Linkedin className="h-3 w-3 shrink-0" />
+              LinkedIn
+            </a>
+            <a
+              href="mailto:marianoenzo00@gmail.com"
+              className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-accent transition-colors"
+            >
+              <Mail className="h-3 w-3 shrink-0" />
+              marianoenzo00@gmail.com
+            </a>
+          </div>
         </div>
       </aside>
     </div>
   )
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}

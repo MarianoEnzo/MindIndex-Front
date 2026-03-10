@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js|json|css|html|md|mjs|svg\\)$|/$\")"
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js|json|css|html|md|mjs|svg\\)$|/$\")",
+      "Bash(node -e \"const l = require\\(''lucide-react''\\); console.log\\(l.Linkedin ? ''OK'' : ''NOT FOUND''\\)\")"
     ]
   }
 }

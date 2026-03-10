@@ -37,11 +37,70 @@ export interface ChatMessage {
   sources: Chunk[]
 }
 
+export type SSEEvent =
+  | { step: 'embedding'; status: 'processing'; message: string }
+  | { step: 'retrieval'; status: 'done'; chunks: Chunk[]; topSimilarity: number }
+  | { step: 'claude'; status: 'done'; answer: string; sources: Chunk[] }
+
+export async function* streamChat(
+  query: string,
+  collectionId: string,
+  topK = 5,
+): AsyncGenerator<SSEEvent> {
+  const response = await fetch(`${BASE_URL}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, collectionId, topK }),
+  })
+  if (!response.ok) throw new Error('Stream request failed')
+  if (!response.body) throw new Error('No response body')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    const chunk = decoder.decode(value)
+    const lines = chunk.split('\n').filter((line) => line.startsWith('data: '))
+
+    for (const line of lines) {
+      try {
+        yield JSON.parse(line.replace('data: ', '')) as SSEEvent
+      } catch {
+        // skip malformed JSON
+      }
+    }
+  }
+}
+
+interface RawCollection {
+  id: string
+  name: string
+  description?: string
+  createdAt: string
+  _count: { documents: number }
+  documents: { chunkCount: number }[]
+}
+
+function normalizeCollection(raw: RawCollection): Collection {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description,
+    createdAt: raw.createdAt,
+    documentCount: raw._count.documents,
+    chunkCount: raw.documents.reduce((sum, d) => sum + d.chunkCount, 0),
+  }
+}
+
 // Collections
 export async function getCollections(): Promise<Collection[]> {
   const res = await fetch(`${BASE_URL}/ingestion/collections`)
   if (!res.ok) throw new Error('Failed to fetch collections')
-  return res.json()
+  const raw: RawCollection[] = await res.json()
+  return raw.map(normalizeCollection)
 }
 
 export async function createCollection(name: string, description: string): Promise<Collection> {
@@ -57,7 +116,8 @@ export async function createCollection(name: string, description: string): Promi
 export async function getCollection(id: string): Promise<Collection> {
   const res = await fetch(`${BASE_URL}/ingestion/collections/${id}`)
   if (!res.ok) throw new Error('Failed to fetch collection')
-  return res.json()
+  const raw: RawCollection = await res.json()
+  return normalizeCollection(raw)
 }
 
 export async function getDocuments(collectionId: string): Promise<Document[]> {
