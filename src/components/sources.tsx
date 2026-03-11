@@ -8,6 +8,10 @@ interface SourcesProps {
   sources: Chunk[]
 }
 
+/**
+ * Collapsible list of source chunks referenced in an assistant message.
+ * Shows document name, page number, and similarity score for each chunk when expanded.
+ */
 export function Sources({ sources }: SourcesProps) {
   const [open, setOpen] = useState(false)
 

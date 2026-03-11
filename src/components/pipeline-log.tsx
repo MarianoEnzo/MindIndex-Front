@@ -12,6 +12,9 @@ export interface PipelineStep {
   durationMs?: number
 }
 
+/**
+ * Renders a single pipeline step row with a status icon, label, and optional duration.
+ */
 function PipelineStepRow({ step }: { step: PipelineStep }) {
   return (
     <div className="flex items-start gap-2.5 py-1.5">
@@ -50,6 +53,11 @@ interface PipelineLogProps {
   waitingLabel: string
 }
 
+/**
+ * Displays the list of pipeline steps, or a blinking waiting indicator when no steps are active.
+ * @param steps - Ordered list of steps to render.
+ * @param waitingLabel - Text shown in the idle state before any query is submitted.
+ */
 export function PipelineLog({ steps, waitingLabel }: PipelineLogProps) {
   if (steps.length === 0) {
     return (

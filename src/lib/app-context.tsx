@@ -127,6 +127,10 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 
+/**
+ * Provides theme, language, and translation state to the entire application.
+ * Persists theme and language preferences to localStorage.
+ */
 export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     return (localStorage.getItem('mi-theme') as Theme) ?? 'dark'
@@ -163,6 +167,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * Returns the current app context (theme, language, translations, and their setters).
+ * Must be called inside an {@link AppProvider}.
+ * @throws If used outside of an AppProvider.
+ */
 export function useApp() {
   const ctx = useContext(AppContext)
   if (!ctx) throw new Error('useApp must be used within AppProvider')
