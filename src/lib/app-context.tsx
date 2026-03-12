@@ -136,7 +136,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return (localStorage.getItem('mi-theme') as Theme) ?? 'dark'
   })
   const [lang, setLangState] = useState<Lang>(() => {
-    return (localStorage.getItem('mi-lang') as Lang) ?? 'en'
+    const saved = localStorage.getItem('mi-lang') as Lang | null
+    if (saved) return saved
+    return navigator.language.startsWith('es') ? 'es' : 'en'
   })
 
   const setTheme = (t: Theme) => {

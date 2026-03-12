@@ -106,8 +106,8 @@ function normalizeCollection(raw: RawCollection): Collection {
     name: raw.name,
     description: raw.description,
     createdAt: raw.createdAt,
-    documentCount: raw._count.documents,
-    chunkCount: raw.documents.reduce((sum, d) => sum + d.chunkCount, 0),
+    documentCount: raw._count?.documents ?? 0,
+    chunkCount: raw.documents?.reduce((sum, d) => sum + (d.chunkCount ?? 0), 0) ?? 0,
   };
 }
 
