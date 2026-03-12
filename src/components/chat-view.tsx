@@ -1,4 +1,3 @@
-'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import { ArrowUp, ArrowLeft, Globe, Linkedin, Mail, Sun, Moon, CircleHelp, X } from 'lucide-react'
@@ -146,22 +145,29 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
 
     try {
       for await (const event of streamChat(query, collectionId)) {
-        if (event.step === 'embedding' && event.status === 'processing') {
-          embedStartTime = Date.now()
-          embedStep = { ...embedStep, status: 'processing' }
+        if (event.step === 'embedding') {
+          if (!embedStartTime) embedStartTime = Date.now()
+          embedStep = { ...embedStep, status: event.status === 'done' ? 'done' : 'processing' }
           setSteps([embedStep, retrieveStep, llmStep, respondStep])
-        } else if (event.step === 'retrieval' && event.status === 'done') {
-          const elapsedMs = embedStartTime ? Date.now() - embedStartTime : undefined
-          retrievalDoneTime = Date.now()
-          embedStep = { ...embedStep, status: 'done', durationMs: elapsedMs }
-          retrieveStep = {
-            id: 'retrieve',
-            label: t.stepRetrieveDone(event.chunks.length, event.topSimilarity.toFixed(3)),
-            status: 'done',
-            durationMs: elapsedMs,
+        } else if (event.step === 'retrieval') {
+          if (event.status === 'processing') {
+            if (!embedStartTime) embedStartTime = Date.now()
+            embedStep = { ...embedStep, status: 'done' }
+            retrieveStep = { ...retrieveStep, status: 'processing' }
+            setSteps([embedStep, retrieveStep, llmStep, respondStep])
+          } else if (event.status === 'done') {
+            const elapsedMs = embedStartTime ? Date.now() - embedStartTime : undefined
+            retrievalDoneTime = Date.now()
+            embedStep = { ...embedStep, status: 'done', durationMs: elapsedMs }
+            retrieveStep = {
+              id: 'retrieve',
+              label: t.stepRetrieveDone(event.chunks.length, event.topSimilarity.toFixed(3)),
+              status: 'done',
+              durationMs: elapsedMs,
+            }
+            llmStep = { ...llmStep, status: 'processing' }
+            setSteps([embedStep, retrieveStep, llmStep, respondStep])
           }
-          llmStep = { ...llmStep, status: 'processing' }
-          setSteps([embedStep, retrieveStep, llmStep, respondStep])
         } else if (event.step === 'claude' && event.status === 'done') {
           const llmMs = retrievalDoneTime ? Date.now() - retrievalDoneTime : undefined
           llmStep = { ...llmStep, status: 'done', durationMs: llmMs }
@@ -169,6 +175,7 @@ export function ChatView({ collectionId, collectionName }: ChatPageProps) {
           setSteps([embedStep, retrieveStep, llmStep, respondStep])
           finalAnswer = event.answer
           finalSources = event.sources
+          break
         }
       }
 

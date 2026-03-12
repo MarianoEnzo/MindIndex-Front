@@ -1,4 +1,3 @@
-'use client'
 
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
@@ -40,9 +39,12 @@ export function Sources({ sources }: SourcesProps) {
               {chunk.pageNumber != null && (
                 <span className="text-muted-foreground"> · p.{chunk.pageNumber}</span>
               )}
-              {typeof chunk.score === 'number' && chunk.score > 0 && (
-                <span className="text-accent ml-2">score: {chunk.score.toFixed(4)}</span>
-              )}
+              {(() => {
+                const s = chunk.score ?? chunk.similarity
+                return typeof s === 'number' && s > 0
+                  ? <span className="text-accent ml-2">score: {s.toFixed(4)}</span>
+                  : null
+              })()}
             </div>
           ))}
         </div>

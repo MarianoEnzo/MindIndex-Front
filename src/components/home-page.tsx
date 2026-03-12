@@ -1,43 +1,54 @@
-'use client'
-
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  Plus, FileText, X, Loader2, Upload, MessageSquare,
-  Globe, Linkedin, Mail, Sun, Moon,
-} from 'lucide-react'
-import { getCollections, createCollection, uploadPDF } from '@/lib/api'
-import type { Collection } from '@/lib/api'
-import useSWR from 'swr'
-import { useApp } from '@/lib/app-context'
+  Plus,
+  FileText,
+  X,
+  Loader2,
+  Upload,
+  MessageSquare,
+  Globe,
+  Linkedin,
+  Mail,
+  Sun,
+  Moon,
+} from "lucide-react";
+import { getCollections, createCollection, uploadPDF } from "@/lib/api";
+import type { Collection } from "@/lib/api";
+import useSWR from "swr";
+import { useApp } from "@/lib/app-context";
 
 // ─── Toggles ──────────────────────────────────────────────────────────────────
 
 function Toggles() {
-  const { theme, setTheme, lang, setLang } = useApp()
+  const { theme, setTheme, lang, setLang } = useApp();
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+        onClick={() => setLang(lang === "en" ? "es" : "en")}
         className="font-mono text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-accent/40 transition-all"
       >
-        {lang === 'en' ? 'ES' : 'EN'}
+        {lang === "en" ? "ES" : "EN"}
       </button>
       <button
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         className="p-1.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-accent/40 transition-all"
         aria-label="Toggle theme"
       >
-        {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+        {theme === "dark" ? (
+          <Sun className="h-3.5 w-3.5" />
+        ) : (
+          <Moon className="h-3.5 w-3.5" />
+        )}
       </button>
     </div>
-  )
+  );
 }
 
 // ─── Collection Card ───────────────────────────────────────────────────────────
 
 function CollectionCard({ collection }: { collection: Collection }) {
-  const { t } = useApp()
+  const { t } = useApp();
   return (
     <div className="group relative flex flex-col gap-3 rounded-lg border border-border border-l-2 border-l-accent bg-card p-4 transition-all hover:border-accent/50 hover:bg-card/80">
       <div className="flex items-start justify-between gap-2">
@@ -55,11 +66,15 @@ function CollectionCard({ collection }: { collection: Collection }) {
 
       <div className="flex gap-4 font-mono text-xs">
         <span>
-          <span className="text-accent font-medium">{collection.documentCount ?? 0}</span>{' '}
+          <span className="text-accent font-medium">
+            {collection.documentCount ?? 0}
+          </span>{" "}
           <span className="text-muted-foreground">{t.docs}</span>
         </span>
         <span>
-          <span className="text-accent font-medium">{collection.chunkCount ?? 0}</span>{' '}
+          <span className="text-accent font-medium">
+            {collection.chunkCount ?? 0}
+          </span>{" "}
           <span className="text-muted-foreground">{t.chunks}</span>
         </span>
       </div>
@@ -80,45 +95,45 @@ function CollectionCard({ collection }: { collection: Collection }) {
         </Link>
       </div>
     </div>
-  )
+  );
 }
 
 // ─── New Collection Form ───────────────────────────────────────────────────────
 
 interface NewCollectionFormProps {
-  onCreated: () => void
-  onCancel: () => void
+  onCreated: () => void;
+  onCancel: () => void;
 }
 
 function NewCollectionForm({ onCreated, onCancel }: NewCollectionFormProps) {
-  const { t } = useApp()
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { t } = useApp();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!name.trim()) {
-      setError(t.formNameRequired)
-      return
+      setError(t.formNameRequired);
+      return;
     }
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const col = await createCollection(name.trim(), description.trim())
-      if (file) await uploadPDF(file, col.id)
-      onCreated()
+      const col = await createCollection(name.trim(), description.trim());
+      if (file) await uploadPDF(file, col.id);
+      onCreated();
     } catch {
-      setError(t.formError)
+      setError(t.formError);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const inputCls =
-    'border border-border rounded-md px-3 py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-all font-mono'
+    "border border-border rounded-md px-3 py-2 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-all font-mono";
 
   return (
     <div className="border border-border border-l-2 border-l-accent rounded-lg p-5 bg-card">
@@ -134,7 +149,10 @@ function NewCollectionForm({ onCreated, onCancel }: NewCollectionFormProps) {
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <label className="font-mono text-xs text-muted-foreground" htmlFor="col-name">
+          <label
+            className="font-mono text-xs text-muted-foreground"
+            htmlFor="col-name"
+          >
             {t.formName} <span className="text-accent">*</span>
           </label>
           <input
@@ -147,7 +165,10 @@ function NewCollectionForm({ onCreated, onCancel }: NewCollectionFormProps) {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="font-mono text-xs text-muted-foreground" htmlFor="col-desc">
+          <label
+            className="font-mono text-xs text-muted-foreground"
+            htmlFor="col-desc"
+          >
             {t.formDescription}
           </label>
           <input
@@ -160,7 +181,10 @@ function NewCollectionForm({ onCreated, onCancel }: NewCollectionFormProps) {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="font-mono text-xs text-muted-foreground" htmlFor="col-file">
+          <label
+            className="font-mono text-xs text-muted-foreground"
+            htmlFor="col-file"
+          >
             {t.formUpload}
           </label>
           <label
@@ -200,18 +224,18 @@ function NewCollectionForm({ onCreated, onCancel }: NewCollectionFormProps) {
         </div>
       </form>
     </div>
-  )
+  );
 }
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 function Footer() {
-  const { t } = useApp()
+  const { t } = useApp();
   return (
     <footer className="border-t border-border py-8 px-6 mt-16">
       <div className="mx-auto max-w-4xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <span className="font-mono text-xs text-muted-foreground">
-          {t.builtBy}{' '}
+          {t.builtBy}{" "}
           <a
             href="https://www.mequiroga.com/"
             target="_blank"
@@ -250,18 +274,20 @@ function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }
 
 // ─── Home Page ────────────────────────────────────────────────────────────────
 
 export function HomePage() {
-  const [showForm, setShowForm] = useState(false)
-  const { t } = useApp()
-  const { data: collections, isLoading, error, mutate } = useSWR<Collection[]>(
-    'collections',
-    getCollections,
-  )
+  const [showForm, setShowForm] = useState(false);
+  const { t } = useApp();
+  const {
+    data: collections,
+    isLoading,
+    error,
+    mutate,
+  } = useSWR<Collection[]>("collections", getCollections);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -313,7 +339,10 @@ export function HomePage() {
           {showForm && (
             <div className="mb-6">
               <NewCollectionForm
-                onCreated={() => { setShowForm(false); mutate() }}
+                onCreated={() => {
+                  setShowForm(false);
+                  mutate();
+                }}
                 onCancel={() => setShowForm(false)}
               />
             </div>
@@ -329,15 +358,16 @@ export function HomePage() {
           {error && (
             <div className="rounded-lg border border-border border-l-2 border-l-destructive p-4 text-center">
               <p className="font-mono text-sm text-destructive">
-                {t.apiError}{' '}
-                <span className="text-foreground">localhost:3000</span>
+                {t.apiError}{" "}
               </p>
             </div>
           )}
 
           {!isLoading && !error && collections && collections.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-12 text-center">
-              <p className="font-mono text-sm text-muted-foreground">{t.noCollections}</p>
+              <p className="font-mono text-sm text-muted-foreground">
+                {t.noCollections}
+              </p>
               <p className="font-mono text-xs text-muted-foreground/60 mt-1">
                 {t.noCollectionsHint}
               </p>
@@ -356,5 +386,5 @@ export function HomePage() {
 
       <Footer />
     </div>
-  )
+  );
 }

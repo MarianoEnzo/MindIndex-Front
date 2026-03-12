@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js|json|css|html|md|mjs|svg\\)$|/$\")",
-      "Bash(node -e \"const l = require\\(''lucide-react''\\); console.log\\(l.Linkedin ? ''OK'' : ''NOT FOUND''\\)\")"
+      "Bash(node -e \"const l = require\\(''lucide-react''\\); console.log\\(l.Linkedin ? ''OK'' : ''NOT FOUND''\\)\")",
+      "Bash(find f:/CODIGO/MindIndex-Front/components -type f -name *.tsx -o -name *.ts)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(sed -i \"1{/^''use client''$/d}\" \"f:/CODIGO/MindIndex-Front/$f\")",
+      "Bash(done)"
     ]
   }
 }
